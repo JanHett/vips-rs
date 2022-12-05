@@ -9,4 +9,4 @@ edition = "2021"
 
 [build-dependencies]
 bindgen = "0.63.0"
-meson = "1.0.0"
+pkg-config = "0.3.26"

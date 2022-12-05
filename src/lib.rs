@@ -1,24 +1,15 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+// TODO: solve or suppress u128 isn't FFI-safe warning
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 #[cfg(test)]
-mod tests {
+mod vips_sys_tests {
     use super::*;
 
     use std::ffi::CString;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
 
     #[test]
     fn test_vips_io() {

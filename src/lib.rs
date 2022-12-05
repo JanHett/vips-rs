@@ -14,21 +14,30 @@ mod vips_sys_tests {
     #[test]
     fn test_vips_io() {
         unsafe {
-            let init_arg = CString::new("").unwrap();
+            let init_arg = CString::new(std::env::args().next().unwrap()).unwrap();
             vips_init(init_arg.as_ptr());
 
             let test_img_path = CString::new("./data/test.jpg").unwrap();
-            let in_img = vips_image_new_from_file(test_img_path.as_ptr());
+            let in_img = vips_image_new_from_file(test_img_path.as_ptr(), 0);
             
-            let width = vips_image_get_width(in_img);
-            println!("width: {}", width);
-            // assert_eq!(width, 128);
+            let input_width = vips_image_get_width(in_img);
+            assert_eq!(input_width, 385);
+            let input_height = vips_image_get_height(in_img);
+            assert_eq!(input_height, 512);
 
-            let mut resized: *mut _VipsImage = std::ptr::null_mut();
-            vips_resize(in_img, &mut resized as *mut*mut _VipsImage, 0.25);
+            let mut resized: *mut VipsImage = std::ptr::null_mut();
+            vips_resize(in_img, &mut resized as *mut*mut VipsImage, 0.25, 0);
 
-            let out_filename = CString::new("./data/test_out.jpg").unwrap();
-            vips_image_write_to_file(resized, out_filename.as_ptr());
+            let resized_width = vips_image_get_width(resized);
+            assert_eq!(resized_width, 96);
+            let resized_height = vips_image_get_height(resized);
+            assert_eq!(resized_height, 128);
+
+            let out_filename_str = "./data/test_out.jpg";
+            let out_filename = CString::new(out_filename_str).unwrap();
+            vips_image_write_to_file(resized, out_filename.as_ptr(), 0);
+
+            std::fs::remove_file(std::path::PathBuf::from(out_filename_str)).unwrap();
             
             vips_shutdown();
         }

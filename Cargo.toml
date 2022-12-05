@@ -3,6 +3,25 @@ name = "vips_sys"
 version = "0.1.0"
 edition = "2021"
 
+license-file = "LICENSE"
+description = "Bindgen-generated Rust bindings for libvips"
+repository = "https://github.com/JanHett/vips_sys"
+homepage = "https://github.com/JanHett/vips_sys"
+documentation = "https://www.libvips.org/"
+readme = "README.md"
+keywords = [
+    "png",
+    "jpeg",
+    "tiff",
+    "webp",
+    "libvips"
+]
+categories = [
+    "external-ffi-bindings",
+    "graphics",
+    "multimedia::images"
+]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

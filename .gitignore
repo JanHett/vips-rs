@@ -1,4 +1,6 @@
-target
-ext
-Cargo.lock
 .DS_Store
+/target
+/Cargo.lock
+/vips-sys/target
+/vips-sys/Cargo.lock
+/vips-sys/ext

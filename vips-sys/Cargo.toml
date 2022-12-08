@@ -1,10 +1,10 @@
 [package]
-name = "vips-rs"
+name = "vips-sys"
 version = "0.1.0"
 edition = "2021"
 
 license-file = "LICENSE"
-description = "Safe Rust bindings for libvips"
+description = "Bindgen-generated Rust bindings for libvips"
 repository = "https://github.com/JanHett/vips_sys"
 homepage = "https://github.com/JanHett/vips_sys"
 documentation = "https://www.libvips.org/"
@@ -17,6 +17,7 @@ keywords = [
     "libvips"
 ]
 categories = [
+    "external-ffi-bindings",
     "graphics",
     "multimedia::images"
 ]
@@ -25,4 +26,6 @@ categories = [
 
 [dependencies]
 
-"vips-sys" = { path = "vips-sys" }
+[build-dependencies]
+bindgen = "0.63.0"
+pkg-config = "0.3.26"

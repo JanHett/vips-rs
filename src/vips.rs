@@ -18,6 +18,9 @@ use crate::*;
 /// already been initialized before. Initializing Vips twice is undefined
 /// behaviour.
 pub fn vips_init() -> Result<(), VipsError> {
+    #[cfg(debug_assertions)]
+    unsafe { vips_sys::vips_leak_set(1) };
+
     let argv_0 = std::env::args().next();
     let c_argv_0 = match argv_0 {
         Some(argv) => CString::new(argv).unwrap_or_default(),
@@ -43,6 +46,9 @@ pub fn vips_init() -> Result<(), VipsError> {
 /// already been initialized before. Initializing Vips twice is undefined
 /// behaviour.
 pub fn vips_init_or_exit() {
+    #[cfg(debug_assertions)]
+    unsafe { vips_sys::vips_leak_set(1) };
+
     let argv_0 = std::env::args().next();
     let c_argv_0 = match argv_0 {
         Some(argv) => CString::new(argv).unwrap_or_default(),
@@ -65,24 +71,28 @@ pub fn vips_shutdown() {
     unsafe { vips_sys::vips_shutdown(); }
 }
 
-/// Initializes Vips when created with `VipsHandle::new()` and calls the
-/// shutdown routine when it is dropped
+/// Initializes Vips when created and calls the shutdown routine when it is
+/// dropped.
 /// 
 /// There should only ever be one instance of this struct and it must live for
 /// as long as you use Vips objects and their operations.
 pub struct VipsHandle {}
 
 impl VipsHandle {
-    pub fn new() -> VipsHandle {
-        let argv_0 = std::env::args().next();
-        let c_argv_0 = match argv_0 {
-            Some(argv) => CString::new(argv).unwrap_or_default(),
-            None => CString::default()
-        };
+    /// Try to initialize Vips and return an error if it fails.
+    /// 
+    /// See `vips_init()`
+    pub fn new() -> Result<VipsHandle, VipsError> {
+        vips_init()?;
 
-        if unsafe { vips_sys::vips_init(c_argv_0.as_ptr()) } != 0 {
-            unsafe { vips_sys::vips_error_exit(std::ptr::null()); }
-        }
+        Ok(VipsHandle{})
+    }
+
+    /// Try to initialize Vips and exit the program if it fails.
+    /// 
+    /// /// See `vips_init_or_exit()`
+    pub fn new_or_exit() -> VipsHandle {
+        vips_init_or_exit();
 
         VipsHandle{}
     }

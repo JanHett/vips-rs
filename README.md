@@ -12,8 +12,9 @@ For the moment, this crate requires libvips 8.13 or higher to be installed on th
 ### `vips-rs`
 
 - [ ] Complete the wrapper for `VipsImage`
-    - [ ] Constructors
-    - [ ] File IO
+    - [x] Constructors
+    - [ ] Image output
+    - [ ] Image properties
     - [ ] `[]` and `()` operators as per the C++ bindings?
 - [ ] Generate operators (via macro?)
 - [ ] Abstract away `VIPS_INIT` and `vips_shutdown` as much as possible

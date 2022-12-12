@@ -16,6 +16,14 @@ pub struct VipsImage {
 
 // === Traits ==================================================================
 
+impl Clone for VipsImage {
+    fn clone(&self) -> Self {
+        unsafe { s::g_object_ref(self.ptr as *mut c_void) };
+
+        VipsImage{ ptr: self.ptr }
+    }
+}
+
 impl Drop for VipsImage {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
@@ -29,13 +37,11 @@ impl Drop for VipsImage {
 impl VipsImage {
     // --- Image creation ---
 
-    // TODO: decide if this should exist
-    // fn new() -> VipsImage {
-    //     VipsImage{ptr: std::ptr::null_mut()}
-    // }
-
-    /// Wrap a `VipsImage` around a pointer to a `vips_sys::VipsImage` and take
-    /// ownership of this pointer
+    /// Wrap a `VipsImage` around a pointer to a `vips_sys::VipsImage`. If this
+    /// pointer has not yet been reffed, you must `vips_sys::g_object_ref(p)`
+    /// before passing it to this function. `VipsImage` will take care of
+    /// unreffing the underlying `*mut vips_sys::VipsImage` when the `VipsImage`
+    /// instance is dropped.
     pub fn from_c_ptr(p: *mut vips_sys::VipsImage) -> Result<VipsImage, VipsError> {
         if p == std::ptr::null_mut() {
             return Err(VipsError::new("Cannot wrap nullptr in VipsImage"));
@@ -43,7 +49,14 @@ impl VipsImage {
         Ok(VipsImage{ptr: p})
     }
 
-    pub fn from_file(file: PathBuf) -> Result<VipsImage, VipsError> {
+    pub fn new() -> Result<VipsImage, VipsError> {
+        VipsImage::from_c_ptr(unsafe {s::vips_image_new()})
+    }
+
+    // TODO: vips_image_new_memory()
+    // TODO: vips_image_memory()
+
+    pub fn new_from_file(file: PathBuf) -> Result<VipsImage, VipsError> {
         let path_str = match file.to_str() {
             Some(pstr) => pstr,
             None => return Err(VipsError::new("Could not convert path to string"))
@@ -59,9 +72,74 @@ impl VipsImage {
         })?)
     }
 
+    // TODO: vips_image_new_from_file_RW()
+    // TODO: vips_image_new_from_file_raw()
+
+    pub fn vips_image_new_from_memory<'a>(
+        data: &'a [u8],
+        width: i32,
+        height: i32,
+        bands: i32,
+        band_format: s::VipsBandFormat
+    ) -> Result<VipsImage, VipsError>{
+        VipsImage::from_c_ptr(unsafe { s::vips_image_new_from_memory(
+            data.as_ptr() as *const c_void, data.len(),
+            width, height, bands, band_format
+        ) })
+    }
+
+    pub fn vips_image_new_from_memory_copy(
+        data: &[u8],
+        width: i32,
+        height: i32,
+        bands: i32,
+        band_format: s::VipsBandFormat
+    ) -> Result<VipsImage, VipsError>{
+        VipsImage::from_c_ptr(unsafe { s::vips_image_new_from_memory_copy(
+            data.as_ptr() as *const c_void, data.len(),
+            width, height, bands, band_format
+        ) })
+    }
+
+    // TODO: vips_image_new_from_buffer()
+    // TODO: vips_image_new_from_source()
+
     pub fn new_matrix(width: i32, height: i32) -> Result<VipsImage, VipsError> {
         Ok(VipsImage::from_c_ptr(unsafe {
             s::vips_image_new_matrix(width, height)
+        })?)
+    }
+
+    // TODO: vips_image_new_matrixv()
+    pub fn new_matrix_from_array(width: i32, height: i32, array: &[f64]) -> Result<VipsImage, VipsError> {
+        let arr_len:i32 = match array.len().try_into() {
+            Ok(l) => l,
+            Err(e) => return Err(VipsError::new(
+                format!("Could not convert convert `array.len()` to i32: {e}")
+            ))
+        };
+
+        Ok(VipsImage::from_c_ptr(unsafe {
+            s::vips_image_new_matrix_from_array(width, height, array.as_ptr(), arr_len)
+        })?)
+    }
+
+    pub fn vips_image_new_from_image(image: &VipsImage, c: &[f64]) -> Result<VipsImage, VipsError> {
+        let arr_len:i32 = match c.len().try_into() {
+            Ok(l) => l,
+            Err(e) => return Err(VipsError::new(
+                format!("Could not convert convert `array.len()` to i32: {e}")
+            ))
+        };
+
+        Ok(VipsImage::from_c_ptr(unsafe {
+            s::vips_image_new_from_image(image.ptr, c.as_ptr(), arr_len)
+        })?)
+    }
+    
+    pub fn vips_image_new_from_image1(image: &VipsImage, c: f64) -> Result<VipsImage, VipsError> {
+        Ok(VipsImage::from_c_ptr(unsafe {
+            s::vips_image_new_from_image1(image.ptr, c)
         })?)
     }
 
@@ -93,13 +171,13 @@ mod image_tests {
     use crate::*;
     use std::path::PathBuf;
 
-    // #[test]
-    // fn image_new() {
-    //     ensure_vips_init_or_exit();
-    //     let image = VipsImage::new();
-    //     // this doesn't make sense - we shouldn't wrap a nullptr
-    //     assert_eq!(image.ptr, std::ptr::null_mut());
-    // }
+    #[test]
+    fn image_new() {
+        ensure_vips_init_or_exit();
+        let image = VipsImage::new()
+            .expect("Failed to create empty image");
+        assert_ne!(image.ptr, std::ptr::null_mut());
+    }
 
     #[test]
     fn image_from_c_ptr() {
@@ -114,9 +192,8 @@ mod image_tests {
     #[test]
     fn vips_image_io() {
         ensure_vips_init_or_exit();
-        unsafe { vips_sys::vips_leak_set(1) };
 
-        let img = VipsImage::from_file(PathBuf::from("./data/test.jpg"))
+        let img = VipsImage::new_from_file(PathBuf::from("./data/test.jpg"))
             .expect("Image could not be created from file");
         assert_ne!(img.ptr, std::ptr::null_mut());
 

@@ -13,7 +13,7 @@
 pub mod vips;
 pub mod image;
 pub mod error;
-pub mod operation;
+pub mod operator;
 
 // =============================================================================
 // === EXPORTED SYMBOLS ========================================================
@@ -30,4 +30,4 @@ pub use crate::vips::{
 pub use crate::error::VipsError;
 pub use crate::image::VipsImage;
 
-pub use crate::operation::*;
+pub use crate::operator::*;

@@ -8,19 +8,19 @@ fn main() {
     // === RESOLVE VIPS ===
 
     let vips_pkg_config = pkg_config::Config::new()
+        .atleast_version("8.13")
         .probe("vips").unwrap();
     
     // === RUN BINDGEN ===
 
     println!("{:?}", vips_pkg_config);
 
-    let vips_header_path = &vips_pkg_config.include_paths[0];
-    let vips_entry_header_path = vips_header_path.join("vips/vips.h");
-    let vips_entry_header_path_str = vips_entry_header_path.to_str().unwrap();
+    let vips_entry_header_path = "src/vips-sys.h";
 
+    println!("cargo:rerun-if-changed={vips_entry_header_path}");
 
     let bindings = bindgen::Builder::default()
-        .header(vips_entry_header_path_str)
+        .header(vips_entry_header_path)
         .clang_args(vips_pkg_config.include_paths.iter()
             .map(|p| format!("-I{}", p.to_str().unwrap()))
         )

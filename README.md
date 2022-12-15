@@ -17,6 +17,8 @@ For the moment, this crate requires libvips 8.13 or higher to be installed on th
     - [ ] Image properties
     - [ ] `[]` and `()` operators as per the C++ bindings?
 - [ ] Generate operators (via macro?)
+    - [x] Define macro
+    - [ ] Generate all operators
 - [ ] Abstract away `VIPS_INIT` and `vips_shutdown` as much as possible
     - [x] `vips_init() -> Result<_,_>`
     - [x] `VipsHandle`
@@ -27,5 +29,6 @@ For the moment, this crate requires libvips 8.13 or higher to be installed on th
 - [ ] Write rudimentary test suite
     - [ ] leak checks
     - [ ] basic functionality checks
+- [ ] Un-ignore doctests and make them pass
 - [ ] Ship Vips with this crate
 - [ ] Publish crate

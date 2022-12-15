@@ -1,4 +1,3 @@
-use std::mem::MaybeUninit;
 use std::ffi::{CString, c_void};
 
 use vips_sys as s;
@@ -8,7 +7,7 @@ use crate::{
     VipsError
 };
 
-trait ToGValue {
+pub trait ToGValue {
     fn to_GValue(&self) -> Option<s::GValue>;
 }
 
@@ -141,35 +140,79 @@ impl ToGValue for VipsImage {
     }
 }
 
+macro_rules! struct_to_arg_init {
+    () => {
+        // init other args
+        $(
+            let g_value = args.$param_name.to_GValue();
+            match g_value {
+                Some(v) => {
+                    let prop_name_c_str = CString::new(stringify!($param_name))?;
+                    s::g_object_set_property(
+                        op as *mut s::GObject,
+                        prop_name_c_str.as_ptr(),
+                        &v
+                    );
+                },
+                _ => {} // if it's not Some(v), this arg wasn't there
+            };
+        )*
+    }
+}
+
 /// Define an operator like:
 /// 
-/// ```
-/// define_operator!(conv, {
+/// ```ignore
+/// define_operator!(conv, struct ConvArgs<'a> {
 ///     mask: &'a VipsImage,
 ///     precision: Option<vips_sys::VipsPrecision>,
 ///     layers: Option<u32>,
 ///     cluster: Option<u32>
-/// })
+/// });
 /// ```
 /// 
 /// If you need to specify a custom input parameter name, you can pass a string
 /// literal as the second argument.
 /// 
-/// ```
-/// define_operator!(add, "left", {
+/// ```ignore
+/// define_operator!(add, "left", struct AddArgs<'a> {
 ///     right: &'a VipsImage
 /// });
 /// ```
+/// 
+/// The name of the argument struct will be discarded and the resulting struct
+/// will always have the name `OpArgs`. The resulting operator can then be
+/// called this way:
+/// 
+/// ```ignore
+/// let convolved = input_img.conv(conv::OpArgs{ ... });
+/// ```
 #[macro_export]
 macro_rules! define_operator {
-    ( $op_name:ident, { $( $arg_name:ident: $arg_type:ty ),* }) => {
-        define_operator!($op_name, "in", { $( $arg_name: $arg_type ),* });
-    };
-    ( $op_name:ident, $input_name:literal, { $( $arg_name:ident: $arg_type:ty ),* }) => {
+    (
+        $op_name:ident,
+        $input_name:literal,
+        $(#[$meta:meta])*
+        $struct_vis:vis struct $param_struct_name:ident $(<$lt:lifetime>)? {
+            $(
+                $(#[$param_meta:meta])*
+                $param_vis:vis $param_name:ident: $param_type:ty
+            ),*
+        }
+    ) => {
         mod $op_name {
             use super::*;
-            pub struct OpArgs<'a> {
-                $( pub $arg_name: $arg_type ),* // TODO: automatically add lifetimes to references?
+
+            use std::ffi::{CString, c_void};
+            use vips_sys as s;
+            use crate::*;
+
+            $(#[$meta])*
+            pub struct OpArgs $(<$lt>)? {
+                $(
+                    $(#[$param_meta:meta])*
+                    $param_vis $param_name : $param_type
+                ),*
             }
 
             impl VipsImage {
@@ -196,10 +239,10 @@ macro_rules! define_operator {
                         
                         // init other args
                         $(
-                            let g_value = args.$arg_name.to_GValue();
+                            let g_value = args.$param_name.to_GValue();
                             match g_value {
                                 Some(v) => {
-                                    let prop_name_c_str = CString::new(stringify!($arg_name))?;
+                                    let prop_name_c_str = CString::new(stringify!($param_name))?;
                                     s::g_object_set_property(
                                         op as *mut s::GObject,
                                         prop_name_c_str.as_ptr(),
@@ -250,26 +293,45 @@ macro_rules! define_operator {
             }
         }
     };
+    ( $op_name:ident, $($param_struct_def:tt)* ) => {
+        define_operator!($op_name, "in", $($param_struct_def)*);
+    };
 }
+
 
 // === ARITHMETIC OPERATORS ===
 
-define_operator!(add, "left", {
-    right: &'a VipsImage
+define_operator!(add, "left", struct Args<'a> {
+    pub right: &'a VipsImage
 });
 
-define_operator!(subtract, "left", {
-    right: &'a VipsImage
+define_operator!(subtract, "left", struct Args<'a> {
+    pub right: &'a VipsImage
 });
+
+// TODO: other ops, operator overloading, arithmetic with constants
+
+// === colour ===
+// === conversion ===
 
 // === CONVOLUTION OPERATORS ===
 
-define_operator!(conv, {
-    mask: &'a VipsImage,
-    precision: Option<vips_sys::VipsPrecision>,
-    layers: Option<u32>,
-    cluster: Option<u32>
+define_operator!(conv, struct Args<'a> {
+    pub mask: &'a VipsImage,
+    pub precision: Option<vips_sys::VipsPrecision>,
+    pub layers: Option<u32>,
+    pub cluster: Option<u32>
 });
+
+// === VipsForeign ===
+// === freqfilt ===
+// === histogram ===
+// === draw ===
+// === VipsInterpolate ===
+// === morphology ===
+// === mosaicing ===
+// === create ===
+// === resample ===
 
 #[cfg(test)]
 mod operation_tests {
@@ -290,9 +352,10 @@ mod operation_tests {
             .expect("Could not create kernel");
 
         let kernel_n_px: f64 = (kernel_size * kernel_size).try_into().unwrap();
+        let kernel_v = 16f64 / kernel_n_px; // TODO: figure out why the kernel needs sum ~16
         unsafe {
             vips_sys::vips_draw_rect1(kernel.ptr,
-                255f64 / kernel_n_px,
+                kernel_v,
                 0, 0, kernel_size, kernel_size, 0);
         }
         let convolved = img.conv(conv::OpArgs{

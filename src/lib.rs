@@ -14,6 +14,7 @@ pub mod vips;
 pub mod image;
 pub mod error;
 pub mod operator;
+pub mod colour;
 
 // =============================================================================
 // === EXPORTED SYMBOLS ========================================================
@@ -31,3 +32,4 @@ pub use crate::error::VipsError;
 pub use crate::image::VipsImage;
 
 pub use crate::operator::*;
+pub use crate::colour::*;

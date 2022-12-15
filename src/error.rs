@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::ffi::CStr;
 
 // =============================================================================
@@ -16,6 +15,9 @@ impl std::fmt::Display for VipsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}", self.description))
     }
+}
+
+impl std::error::Error for VipsError {
 }
 
 impl From<std::ffi::NulError> for VipsError {

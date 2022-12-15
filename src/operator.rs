@@ -1,27 +1,24 @@
-use std::ffi::{CString, c_void};
+use std::ffi::c_void;
 
 use vips_sys as s;
 
-use crate::{
-    VipsImage,
-    VipsError
-};
+use crate::VipsImage;
 
 pub trait ToGValue {
-    fn to_GValue(&self) -> Option<s::GValue>;
+    fn to_gvalue(&self) -> Option<s::GValue>;
 }
 
 impl<T> ToGValue for Option<T> where T: ToGValue {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         match self {
-            Some(v) => v.to_GValue(),
+            Some(v) => v.to_gvalue(),
             None => None
         }
     }
 }
 
 impl ToGValue for i32 {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -41,7 +38,7 @@ impl ToGValue for i32 {
 }
 
 impl ToGValue for u32 {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -61,7 +58,7 @@ impl ToGValue for u32 {
 }
 
 impl ToGValue for f32 {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -81,7 +78,7 @@ impl ToGValue for f32 {
 }
 
 impl ToGValue for f64 {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -101,7 +98,7 @@ impl ToGValue for f64 {
 }
 
 impl ToGValue for bool {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -121,7 +118,7 @@ impl ToGValue for bool {
 }
 
 impl ToGValue for VipsImage {
-    fn to_GValue(&self) -> Option<s::GValue> {
+    fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
             let mut g_value: s::GValue = std::mem::zeroed();
     
@@ -140,23 +137,79 @@ impl ToGValue for VipsImage {
     }
 }
 
-macro_rules! struct_to_arg_init {
-    () => {
-        // init other args
-        $(
-            let g_value = args.$param_name.to_GValue();
-            match g_value {
-                Some(v) => {
-                    let prop_name_c_str = CString::new(stringify!($param_name))?;
-                    s::g_object_set_property(
-                        op as *mut s::GObject,
-                        prop_name_c_str.as_ptr(),
-                        &v
-                    );
-                },
-                _ => {} // if it's not Some(v), this arg wasn't there
+#[macro_export]
+macro_rules! parse_operator_input {
+    ($self:ident, $op_name:ident, $input_name:literal) => {
+        {
+            use std::ffi::CString;
+            use vips_sys as s;
+
+            use crate::*;
+
+            let op_name_c_str = CString::new(stringify!($op_name))?;
+            let op = s::vips_operation_new(op_name_c_str.as_ptr());
+
+            if op == std::ptr::null_mut() {
+                return Err(VipsError::new("Could not create operation"));
+            }
+
+            let g_value = match $self.to_gvalue() {
+                Some(value) => value,
+                None => return Err(VipsError::new("Failed to convert input image to GValue"))
             };
-        )*
+
+            let prop_name_c_str = CString::new($input_name)?;
+            s::g_object_set_property(
+                op as *mut s::GObject,
+                prop_name_c_str.as_ptr(),
+                &g_value
+            );
+
+            op
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! run_operator {
+    ($op:ident) => {
+        {
+            // run the op
+            let cached_op = s::vips_cache_operation_build($op);
+            s::g_object_unref($op as *mut c_void);
+
+            if cached_op == std::ptr::null_mut() {
+                // TODO: add custom message for context
+                return Err(VipsError::new_from_vips_state());
+            }
+
+            // get result
+            let mut g_value: s::GValue = std::mem::zeroed();
+            s::g_value_init(
+                &mut g_value,
+                s::vips_image_get_type()
+            );
+            let prop_name_c_str = CString::new("out")?;
+            s::g_object_get_property(
+                cached_op as *mut s::GObject,
+                prop_name_c_str.as_ptr(),
+                &mut g_value
+            );
+            let out = VipsImage::from_c_ptr(
+                s::g_value_get_object(
+                    &g_value
+                ) as *mut s::VipsImage
+            )?;
+            // g_value_get_object() does not ref the object, so we need to make
+            // a ref for out to hold.
+            s::g_object_ref(out.ptr as *mut c_void);
+            s::g_value_unset(&mut g_value);
+
+            s::vips_object_unref_outputs(cached_op as *mut s::VipsObject);
+            s::g_object_unref(cached_op as *mut c_void);
+
+            out
+        }
     }
 }
 
@@ -189,6 +242,7 @@ macro_rules! struct_to_arg_init {
 /// ```
 #[macro_export]
 macro_rules! define_operator {
+    // maximalist pattern: custom input name, arg struct definition
     (
         $op_name:ident,
         $input_name:literal,
@@ -205,6 +259,7 @@ macro_rules! define_operator {
 
             use std::ffi::{CString, c_void};
             use vips_sys as s;
+
             use crate::*;
 
             $(#[$meta])*
@@ -217,29 +272,11 @@ macro_rules! define_operator {
 
             impl VipsImage {
                 pub fn $op_name(&self, args: OpArgs) -> Result<VipsImage, VipsError> {
-                    unsafe {
-                        let op_name_c_str = CString::new(stringify!($op_name))?;
-                        let op = s::vips_operation_new(op_name_c_str.as_ptr());
-
-                        if op == std::ptr::null_mut() {
-                            return Err(VipsError::new("Could not create operation"));
-                        }
-
-                        let g_value = match self.to_GValue() {
-                            Some(value) => value,
-                            None => return Err(VipsError::new("Failed to convert input image to GValue"))
-                        };
-
-                        let prop_name_c_str = CString::new($input_name)?;
-                        s::g_object_set_property(
-                            op as *mut s::GObject,
-                            prop_name_c_str.as_ptr(),
-                            &g_value
-                        );
+                    unsafe {let op = parse_operator_input!(self, $op_name, $input_name);
                         
                         // init other args
                         $(
-                            let g_value = args.$param_name.to_GValue();
+                            let g_value = args.$param_name.to_gvalue();
                             match g_value {
                                 Some(v) => {
                                     let prop_name_c_str = CString::new(stringify!($param_name))?;
@@ -253,39 +290,7 @@ macro_rules! define_operator {
                             };
                         )*
 
-                        // run the op
-                        let cached_op = s::vips_cache_operation_build(op);
-                        s::g_object_unref(op as *mut c_void);
-
-                        if cached_op == std::ptr::null_mut() {
-                            // TODO: add custom message for context
-                            return Err(VipsError::new_from_vips_state());
-                        }
-
-                        // get result
-                        let mut g_value: s::GValue = std::mem::zeroed();
-                        s::g_value_init(
-                            &mut g_value,
-                            s::vips_image_get_type()
-                        );
-                        let prop_name_c_str = CString::new("out")?;
-                        s::g_object_get_property(
-                            cached_op as *mut s::GObject,
-                            prop_name_c_str.as_ptr(),
-                            &mut g_value
-                        );
-                        let out = VipsImage::from_c_ptr(
-                            s::g_value_get_object(
-                                &g_value
-                            ) as *mut s::VipsImage
-                        )?;
-                        // g_value_get_object() does not ref the object, so we need to make
-                        // a ref for out to hold.
-                        s::g_object_ref(out.ptr as *mut c_void);
-                        s::g_value_unset(&mut g_value);
-
-                        s::vips_object_unref_outputs(cached_op as *mut s::VipsObject);
-                        s::g_object_unref(cached_op as *mut c_void);
+                        let out = run_operator!(op);
 
                         return Ok(out);
                     }
@@ -293,8 +298,37 @@ macro_rules! define_operator {
             }
         }
     };
+    // custom input name with no args
+    (
+        $op_name:ident,
+        $input_name:literal
+    ) => {
+        mod $op_name {
+            use super::*;
+
+            use std::ffi::{CString, c_void};
+            use vips_sys as s;
+
+            use crate::*;
+
+            impl VipsImage {
+                pub fn $op_name(&self) -> Result<VipsImage, VipsError> {
+                    unsafe {
+                        let op = parse_operator_input!(self, $op_name, $input_name);
+                        let out = run_operator!(op);
+                        return Ok(out);
+                    }
+                }
+            }
+        }
+    };
+    // using the standard input name "in", with args...
     ( $op_name:ident, $($param_struct_def:tt)* ) => {
         define_operator!($op_name, "in", $($param_struct_def)*);
+    };
+    // and without...
+    ( $op_name:ident ) => {
+        define_operator!($op_name, "in");
     };
 }
 

@@ -16,6 +16,12 @@ pub struct VipsImage {
 
 // === Traits ==================================================================
 
+impl Default for VipsImage {
+    fn default() -> Self {
+        VipsImage::new()
+    }
+}
+
 impl Clone for VipsImage {
     fn clone(&self) -> Self {
         unsafe { s::g_object_ref(self.ptr as *mut c_void) };
@@ -49,8 +55,11 @@ impl VipsImage {
         Ok(VipsImage{ptr: p})
     }
 
-    pub fn new() -> Result<VipsImage, VipsError> {
+    pub fn new() -> VipsImage {
+        //  TODO: make sure that vips_image_new really doesn't ever return a nullptr
         VipsImage::from_c_ptr(unsafe {s::vips_image_new()})
+            .expect("Unexpected nullptr returned from `vips_image_new` -
+            something is very wrong because this should never happen")
     }
 
     // TODO: vips_image_new_memory()
@@ -75,7 +84,7 @@ impl VipsImage {
     // TODO: vips_image_new_from_file_RW()
     // TODO: vips_image_new_from_file_raw()
 
-    pub fn vips_image_new_from_memory<'a>(
+    pub fn new_from_memory<'a>(
         data: &'a [u8],
         width: i32,
         height: i32,
@@ -88,7 +97,7 @@ impl VipsImage {
         ) })
     }
 
-    pub fn vips_image_new_from_memory_copy(
+    pub fn new_from_memory_copy(
         data: &[u8],
         width: i32,
         height: i32,
@@ -124,7 +133,7 @@ impl VipsImage {
         })?)
     }
 
-    pub fn vips_image_new_from_image(image: &VipsImage, c: &[f64]) -> Result<VipsImage, VipsError> {
+    pub fn new_from_image(image: &VipsImage, c: &[f64]) -> Result<VipsImage, VipsError> {
         let arr_len:i32 = match c.len().try_into() {
             Ok(l) => l,
             Err(e) => return Err(VipsError::new(
@@ -137,7 +146,7 @@ impl VipsImage {
         })?)
     }
     
-    pub fn vips_image_new_from_image1(image: &VipsImage, c: f64) -> Result<VipsImage, VipsError> {
+    pub fn new_from_image1(image: &VipsImage, c: f64) -> Result<VipsImage, VipsError> {
         Ok(VipsImage::from_c_ptr(unsafe {
             s::vips_image_new_from_image1(image.ptr, c)
         })?)
@@ -160,6 +169,14 @@ impl VipsImage {
 
         Ok(())
     }
+
+    // --- Image Properties ---
+
+    pub fn nbands(&self) -> usize {
+        unsafe {
+            s::vips_image_get_bands(self.ptr) as usize
+        }
+    }
 }
 
 // =============================================================================
@@ -167,15 +184,14 @@ impl VipsImage {
 // =============================================================================
 
 #[cfg(test)]
-mod image_tests {
+mod tests {
     use crate::*;
     use std::path::PathBuf;
 
     #[test]
     fn image_new() {
         ensure_vips_init_or_exit();
-        let image = VipsImage::new()
-            .expect("Failed to create empty image");
+        let image = VipsImage::new();
         assert_ne!(image.ptr, std::ptr::null_mut());
     }
 

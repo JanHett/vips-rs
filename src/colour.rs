@@ -86,7 +86,7 @@ define_operator!(XYZ2CMYK);
 // TODO: float    vips_col_dE00()
 
 #[cfg(test)]
-mod colour_tests {
+mod tests {
     use std::path::PathBuf;
     use vips_sys as s;
     use super::*;

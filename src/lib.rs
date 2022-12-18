@@ -14,6 +14,7 @@ pub mod vips;
 pub mod image;
 pub mod error;
 pub mod operator;
+pub mod arithmetic;
 pub mod colour;
 
 // =============================================================================
@@ -32,4 +33,6 @@ pub use crate::error::VipsError;
 pub use crate::image::VipsImage;
 
 pub use crate::operator::*;
+
+pub use crate::arithmetic::*;
 pub use crate::colour::*;

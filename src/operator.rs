@@ -117,6 +117,26 @@ impl ToGValue for bool {
     }
 }
 
+// TODO
+impl<'a> ToGValue for &[f64] {
+    fn to_gvalue(&self) -> Option<s::GValue> {
+        unsafe {
+            let mut g_value: s::GValue = std::mem::zeroed();
+    
+            s::g_value_init(
+                &mut g_value,
+                s::vips_array_double_get_type()
+            );
+
+            s::vips_value_set_array_double(
+                &mut g_value, self.as_ptr(),
+                self.len().try_into().ok()?);
+
+            return Some(g_value);
+        }
+    }
+}
+
 impl ToGValue for VipsImage {
     fn to_gvalue(&self) -> Option<s::GValue> {
         unsafe {
@@ -255,11 +275,10 @@ macro_rules! define_operator {
         }
     ) => {
         mod $op_name {
-            use super::*;
-
             use std::ffi::{CString, c_void};
             use vips_sys as s;
-
+            
+            // use super::*;
             use crate::*;
 
             $(#[$meta])*
@@ -332,23 +351,9 @@ macro_rules! define_operator {
     };
 }
 
-
-// === ARITHMETIC OPERATORS ===
-
-define_operator!(add, "left", struct Args<'a> {
-    pub right: &'a VipsImage
-});
-
-define_operator!(subtract, "left", struct Args<'a> {
-    pub right: &'a VipsImage
-});
-
-// TODO: other ops, operator overloading, arithmetic with constants
-
-// === colour ===
-// === conversion ===
-
 // === CONVOLUTION OPERATORS ===
+
+// TODO: move this to its own module
 
 define_operator!(conv, struct Args<'a> {
     pub mask: &'a VipsImage,
@@ -357,18 +362,8 @@ define_operator!(conv, struct Args<'a> {
     pub cluster: Option<u32>
 });
 
-// === VipsForeign ===
-// === freqfilt ===
-// === histogram ===
-// === draw ===
-// === VipsInterpolate ===
-// === morphology ===
-// === mosaicing ===
-// === create ===
-// === resample ===
-
 #[cfg(test)]
-mod operation_tests {
+mod tests {
     use super::*;
     use crate::ensure_vips_init_or_exit;
     use std::path::PathBuf;
@@ -400,33 +395,5 @@ mod operation_tests {
 
         convolved.write_to_file(PathBuf::from("./data/test_convolved.jpg"))
             .expect("Could not save image to file");
-    }
-
-    #[test]
-    fn add() {
-        ensure_vips_init_or_exit();
-
-        let img = VipsImage::new_from_file(PathBuf::from("./data/test.jpg"))
-            .expect("Image could not be created from file");
-        assert_ne!(img.ptr, std::ptr::null_mut());
-
-        let _added = img.add(add::OpArgs{right: &img})
-            .expect("Could not add image");
-
-        // TODO: check if pixel values make sense
-    }
-
-    #[test]
-    fn subtract() {
-        ensure_vips_init_or_exit();
-
-        let img = VipsImage::new_from_file(PathBuf::from("./data/test.jpg"))
-            .expect("Image could not be created from file");
-        assert_ne!(img.ptr, std::ptr::null_mut());
-
-        let _subtracted = img.subtract(subtract::OpArgs{right: &img})
-            .expect("Could not subtract image");
-
-        // TODO: check if pixel values make sense
     }
 }
